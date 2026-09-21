@@ -189,7 +189,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.caption("Agentic Workflow: Query Plan → Discovery → Parallel Deep Research → Analyst Synthesis → QA Audit")
+st.caption("Agentic Workflow: Query Plan -> Discovery -> Parallel Deep Research -> Analyst Synthesis -> Critic Audit")
 
 with st.sidebar:
     company_input = st.text_input("Target Company", placeholder="e.g., Figma")
@@ -234,7 +234,7 @@ if start_btn:
             report = agent_4_analyst(company_input, product_input, profiles)
             
             # Agent 5
-            status.update(label="Agent 5: Running QA audit & fact check...")
+            status.update(label="Agent 5: Running critic audit & fact check...")
             critique = agent_5_critic(profiles, report)
             
             status.update(label="Pipeline Complete!", state="complete")
@@ -246,7 +246,7 @@ if start_btn:
         m3.metric("Critic Audit Flags", len(critique.get("flags", [])))
 
         if critique.get("flags"):
-            with st.expander("⚠️ Audit Flag (Critic Agent5"):
+            with st.expander("⚠️ Audit Flag (Critic Agen5"):
                 for flag in critique["flags"]:
                     st.write(f"- {flag}")
 
@@ -254,7 +254,7 @@ if start_btn:
         t1, t2, t3 = st.tabs(["Comparison Matrix", "SWOT & Positioning", "Sources & Profiles"])
 
         with t1:
-            st.markdown(f"**Positioning Statement**\n {report.get('positioning_statement', 'N/A')}")
+            st.markdown(f"**Positioning Statement**\n\n {report.get('positioning_statement', 'N/A')}")
             raw_table = report.get("comparison_table", [])
             
             if raw_table:
