@@ -22,7 +22,7 @@ class SuppressGenAIWarnings(logging.Filter):
 logging.getLogger("google_genai.types").addFilter(SuppressGenAIWarnings())
 
 # ---------------- 1. Config & Initializations ----------------
-st.set_page_config(page_title="Competitive Intelligence System", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="IntelAgent AI | Competitive Intelligence", page_icon="📡", layout="wide")
 
 MODEL = "gemini-3.6-flash"
 MAX_COMPETITORS = 3
@@ -172,13 +172,38 @@ def agent_5_critic(profiles: list[dict], report: dict) -> dict:
 
 # ---------------- 4. Streamlit App Interface ----------------
 
-st.title("⚡ 5-Agent Competitive Intelligence System")
-st.caption("Agentic Workflow: Query Plan -> Discovery -> Parallel Deep Research -> Analyst Synthesis -> Critic Audit")
+# Custom Visual Header with SVG Logo and Refined Title
+st.markdown(
+    """
+    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 5px;">
+        <svg width="42" height="42" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 20C7.59 20 4 16.41 4 12C4 7.59 7.59 4 12 4C16.41 4 20 7.59 20 12C20 16.41 16.41 20 12 20ZM12 6C8.69 6 6 8.69 6 12C6 15.31 8.69 18 12 18C15.31 18 18 15.31 18 12C18 8.69 15.31 6 12 6ZM12 16C9.79 16 8 14.21 8 12C8 9.79 9.79 8 12 8C14.21 8 16 9.79 16 12C16 14.21 14.21 16 12 16Z" fill="#FF4B4B"/>
+            <circle cx="12" cy="12" r="2.5" fill="#1E88E5"/>
+        </svg>
+        <div>
+            <h1 style="margin: 0; padding: 0; font-size: 2.2rem; font-weight: 700;">IntelAgent AI</h1>
+            <p style="margin: 0; color: #555; font-size: 1rem;">Autonomous 5-Agent Competitive Intelligence Pipeline</p>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+st.caption("Agentic Workflow: Query Plan → Discovery → Parallel Deep Research → Analyst Synthesis → QA Audit")
 
 with st.sidebar:
-    company_input = st.text_input("Target Company", value="ScienceLogic")
-    product_input = st.text_input("Product / Domain", value="AIOps & Infrastructure Monitoring")
+    company_input = st.text_input("Target Company", placeholder="e.g., Figma")
+    product_input = st.text_input("Product / Domain", placeholder="e.g., Figma Design")
     start_btn = st.button("Run Analysis Pipeline", type="primary")
+
+# App Disclaimer
+    st.sidebar.divider()
+    st.sidebar.caption(
+        "ℹ️ **Demo Disclaimer**\n\n"
+        "This application is a portfolio proof-of-concept running on free-tier API quotas. "
+        "Analysis is generated autonomously using Gemini 3.6-Flash and Exa.ai, and outputs "
+        "should be verified independently."
+    )
 
 if start_btn:
     if not company_input or not product_input:
@@ -319,3 +344,5 @@ if start_btn:
             file_name="competitive_analysis.json",
             mime="application/json"
         )
+
+
