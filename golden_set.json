@@ -1,0 +1,39 @@
+[
+  {
+    "id": "nvidia-gpu",
+    "company": "Nvidia",
+    "product": "GPU",
+    "must_include": ["AMD", "Intel"],
+    "nice_to_include": ["Intel Arc", "AMD Radeon"],
+    "must_not_include": ["Nvidia"],
+    "required_facts": [
+      {"check": "every_pricing_claim_has_source", "weight": 2},
+      {"check": "no_null_fields_in_profiles", "weight": 2},
+      {"check": "at_least_3_competitors", "weight": 1}
+    ]
+  },
+  {
+    "id": "slack-messaging",
+    "company": "Slack",
+    "product": "team messaging",
+    "must_include": ["Microsoft Teams", "Google Chat", "Discord"],
+    "nice_to_include": ["Zoom Team Chat", "Rocket.Chat"],
+    "must_not_include": ["Slack"],
+    "required_facts": [
+      {"check": "every_pricing_claim_has_source", "weight": 2},
+      {"check": "no_null_fields_in_profiles", "weight": 2}
+    ]
+  },
+  {
+    "id": "figma-design",
+    "company": "Figma",
+    "product": "UI design tool",
+    "must_include": ["Adobe XD", "Sketch"],
+    "nice_to_include": ["Penpot", "Framer", "Canva"],
+    "must_not_include": ["Figma"],
+    "required_facts": [
+      {"check": "every_pricing_claim_has_source", "weight": 2},
+      {"check": "no_null_fields_in_profiles", "weight": 2}
+    ]
+  }
+]
