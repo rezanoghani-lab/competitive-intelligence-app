@@ -195,15 +195,17 @@ def _repair_profile(profile: dict, comp_name: str, snaps: list) -> dict:
         }
     missing = [f for f in REQUIRED_PROFILE_FIELDS if not profile.get(f)]
     if missing:
+        fresh = []
+        for f in missing[:2]:  # max one extra search per missing field
+            q = f"{comp_name} pricing plans cost" if f == "pricing_model" else f"{comp_name} product overview"
+            fresh += search_exa(q, num_results=3, recency_days=365)
         retry = call_gemini_json(
             REPAIR_PROMPT,
-            f"Missing fields: {missing}\nExisting profile: {json.dumps(profile)}\nEvidence: {json.dumps(snaps[:6])}"
+            f"Missing fields: {missing}\nExisting profile: {json.dumps(profile)}\nEvidence: {json.dumps((snaps + fresh)[:12])}"
         )
         for f in missing:
-            if retry.get(f):
-                profile[f] = retry[f]
-            elif not profile.get(f):
-                profile[f] = "unclear"
+            val = retry.get(f)
+            profile[f] = val if val else "unclear"
     # Features must carry sources; drop ones that do not
     clean_features = []
     for feat in profile.get("key_features", []):
@@ -216,7 +218,8 @@ def _repair_profile(profile: dict, comp_name: str, snaps: list) -> dict:
 
 def agent_3_research_single(comp_name: str, target_company: str, target_product: str) -> dict:
     """Agent 3: Worker agent researching a single competitor (with schema repair)."""
-    snaps = search_exa(f"{comp_name} features pricing comparison", num_results=3, recency_days=365)
+    snaps = (search_exa(f"{comp_name} key features overview", num_results=4, recency_days=365)
+             + search_exa(f"{comp_name} pricing plans cost", num_results=4, recency_days=365))
     system = """Extract competitor profile as JSON with keys:
     'name', 'one_liner', 'key_features' (list of dicts with 'feature' and 'source'),
     'pricing_model', 'positioning'
@@ -271,6 +274,8 @@ For EACH claim return: status (supported / partially_supported / unsupported),
 confidence (0.0-1.0 based on number and recency of independent sources and directness
 of evidence), and evidence_url (from the profiles, or "").
 Claims about pricing or specific numbers require a direct source to be "supported".
+Prefer independent sources (reviews, third-party comparisons) over the vendor's own pages.
+A claim needs two or more independent sources to deserve confidence >= 0.8.
 Return JSON: {"verdicts": [{"claim": str, "status": str, "confidence": float, "evidence_url": str}]}"""
 
 def agent_6_judge(profiles: list[dict], report: dict) -> list[dict]:
