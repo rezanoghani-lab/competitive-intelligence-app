@@ -254,7 +254,27 @@ def agent_4_analyst(company: str, product: str, profiles: list[dict]) -> dict:
         '  "threat_level": "Low | Medium | High"\n'
         "}"
     )
-    prompt = f"Target: {company} ({product}). Competitor Profiles:\n{json.dumps(profiles)}"
+    target_profile = next(
+	    (p for p in profiles
+	     if p.get("name", "").lower() == company.lower()),
+	    {}
+	)
+	
+	competitor_profiles = [
+	    p for p in profiles
+	    if p.get("name", "").lower() != company.lower()
+	]
+	
+	prompt = f"""
+	Target Company: {company}
+	Product Domain: {product}
+	
+	Target Company Profile:
+	{json.dumps(target_profile)}
+	
+	Competitor Profiles:
+	{json.dumps(competitor_profiles)}
+	"""
     return call_gemini_json(system, prompt)
 
 def agent_5_critic(profiles: list[dict], report: dict) -> dict:
@@ -300,21 +320,47 @@ def run_pipeline(company: str, product: str) -> dict:
         search_data.extend(search_exa(q))
     candidates = agent_2_discovery(company, product, search_data)
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        profiles = list(executor.map(
-            lambda c: agent_3_research_single(c["name"], company, product),
-            candidates
-        ))
-    report = agent_4_analyst(company, product, profiles)
-    critique = agent_5_critic(profiles, report)
-    verdicts = agent_6_judge(profiles, report)
-    return {
-        "profiles": profiles,
-        "report": report,
-        "critique": critique,
-        "verdicts": verdicts,
-        "report_confidence": aggregate_confidence(verdicts),
-    }
+    competitor_profiles = list(executor.map(
+        lambda c: agent_3_research_single(
+            c["name"],
+            company,
+            product
+        ),
+        candidates
+    ))
 
+	# Research the target company as well
+	target_profile = agent_3_research_single(
+	    company,
+	    company,
+	    product
+	)
+	
+	all_profiles = [target_profile] + competitor_profiles
+	
+	report = agent_4_analyst(
+	    company,
+	    product,
+	    all_profiles
+	)
+	
+	critique = agent_5_critic(
+	    all_profiles,
+	    report
+	)
+	
+	verdicts = agent_6_judge(
+	    all_profiles,
+	    report
+	)
+	
+	return {
+	    "profiles": all_profiles,
+	    "report": report,
+	    "critique": critique,
+	    "verdicts": verdicts,
+	    "report_confidence": aggregate_confidence(verdicts),
+	}
 # ---------------- 4. Streamlit App Interface ----------------
 st.markdown(
     """
@@ -364,19 +410,42 @@ if start_btn:
 
             status.update(label=f"Agent 3: Conducting parallel research on {len(candidates)} competitors...")
             with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-                profiles = list(executor.map(
-                    lambda c: agent_3_research_single(c["name"], company_input, product_input),
-                    candidates
-                ))
-
-            status.update(label="Agent 4: Synthesizing SWOT, positioning & matrix...")
-            report = agent_4_analyst(company_input, product_input, profiles)
-
-            status.update(label="Agent 5: Running critic audit & fact check...")
-            critique = agent_5_critic(profiles, report)
-
-            status.update(label="Agent 6: Judge scoring claims for confidence calibration...")
-            verdicts = agent_6_judge(profiles, report)
+			    competitor_profiles = list(executor.map(
+			        lambda c: agent_3_research_single(
+			            c["name"],
+			            company_input,
+			            product_input
+			        ),
+			        candidates
+			    ))
+			
+			# Research target company
+			target_profile = agent_3_research_single(
+			    company_input,
+			    company_input,
+			    product_input
+			)
+			
+			profiles = [target_profile] + competitor_profiles
+			
+			status.update(label="Agent 4: Synthesizing SWOT, positioning & matrix...")
+			report = agent_4_analyst(
+			    company_input,
+			    product_input,
+			    profiles
+			)
+			
+			status.update(label="Agent 5: Running critic audit & fact check...")
+			critique = agent_5_critic(
+			    profiles,
+			    report
+			)
+			
+			status.update(label="Agent 6: Judge scoring claims for confidence calibration...")
+			verdicts = agent_6_judge(
+			    profiles,
+			    report
+			)
             report_conf = aggregate_confidence(verdicts)
 
             status.update(label="Pipeline Complete!", state="complete")
