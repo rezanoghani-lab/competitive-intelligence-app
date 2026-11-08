@@ -34,6 +34,36 @@ MIN_COMPETITORS_TARGET = 4          # discovery retries broadly if below this
 RELEVANCE_THRESHOLD = 5
 FEEDBACK_FILE = "feedback_log.csv"  # ephemeral on Streamlit Cloud; fine for demo
 
+TRUSTED_DOMAINS = {
+    # Analyst Firms
+    "gartner.com": 10,
+    "forrester.com": 10,
+
+    # Review Platforms
+    "g2.com": 9,
+    "capterra.com": 9,
+
+    # News / Intelligence
+    "reuters.com": 9,
+    "bloomberg.com": 9,
+
+    # Product Reviews
+    "pcmag.com": 8,
+    "techradar.com": 8,
+    "zapier.com": 8,
+
+    # Reference
+    "wikipedia.org": 5
+}
+def get_source_score(url: str) -> int:
+    url = url.lower()
+
+    for domain, score in TRUSTED_DOMAINS.items():
+        if domain in url:
+            return score
+
+    return 3
+
 GEMINI_KEY = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 EXA_KEY = st.secrets.get("EXA_API_KEY") or os.environ.get("EXA_API_KEY")
 
@@ -68,28 +98,46 @@ def call_gemini_json(system_prompt: str, user_prompt: str, retries: int = 3) -> 
 
 def search_exa(query: str, num_results: int = 4, recency_days: int = 365) -> list[dict]:
     """Execute search query using Exa API. Guardrail: recency filter + graceful fallback."""
+
     try:
         res = exa_client.search(
             query,
             num_results=num_results,
             type="auto",
-            start_published_date=(datetime.now() - timedelta(days=recency_days)).strftime("%Y-%m-%d")
+            start_published_date=(
+                datetime.now() - timedelta(days=recency_days)
+            ).strftime("%Y-%m-%d")
         )
+
     except TypeError:
         # Older exa-py SDK without date filtering support
-        res = exa_client.search(query, num_results=num_results, type="auto")
+        res = exa_client.search(
+            query,
+            num_results=num_results,
+            type="auto"
+        )
+
     except Exception as e:
         print(f"[EXA ERROR] Query '{query}': {e}")
         return []
+
     cleaned = []
+
     for item in res.results:
         cleaned.append({
             "url": item.url,
             "title": getattr(item, "title", "Source"),
-            "content": getattr(item, "text", "")[:400]
+            "content": getattr(item, "text", "")[:400],
+            "source_score": get_source_score(item.url)
         })
-    return cleaned
 
+    cleaned = sorted(
+        cleaned,
+        key=lambda x: x.get("source_score", 0),
+        reverse=True
+    )
+
+    return cleaned
 # ---------------- 2b. Confidence + Feedback utilities ----------------
 STATUS_WEIGHTS = {"supported": 1.0, "partially_supported": 0.5, "unsupported": 0.0}
 
@@ -218,13 +266,39 @@ def _repair_profile(profile: dict, comp_name: str, snaps: list) -> dict:
 
 def agent_3_research_single(comp_name: str, target_company: str, target_product: str) -> dict:
     """Agent 3: Worker agent researching a single competitor (with schema repair)."""
-    snaps = (search_exa(f"{comp_name} key features overview", num_results=4, recency_days=365)
-             + search_exa(f"{comp_name} pricing plans cost", num_results=4, recency_days=365))
+
+    snaps = (
+        search_exa(
+            f"{comp_name} key features overview",
+            num_results=4,
+            recency_days=365
+        )
+        + search_exa(
+            f"{comp_name} pricing plans cost",
+            num_results=4,
+            recency_days=365
+        )
+        + search_exa(
+            f"{comp_name} G2 reviews",
+            num_results=2,
+            recency_days=365
+        )
+        + search_exa(
+            f"{comp_name} Capterra reviews",
+            num_results=2,
+            recency_days=365
+        )
+        + search_exa(
+            f"{comp_name} PCMag review",
+            num_results=2,
+            recency_days=365
+        )
+    )
+
     system = """Extract competitor profile as JSON with keys:
     'name', 'one_liner', 'key_features' (list of dicts with 'feature' and 'source'),
     'pricing_model', 'positioning'
     Use "unclear" for anything the evidence does not support. Never guess."""
-
     prompt = f"Competitor: {comp_name}. Target Benchmark: {target_company} {target_product}.\nEvidence: {json.dumps(snaps)}"
     profile = call_gemini_json(system, prompt)
     profile = _repair_profile(profile, comp_name, snaps)
@@ -294,8 +368,34 @@ For EACH claim return: status (supported / partially_supported / unsupported),
 confidence (0.0-1.0 based on number and recency of independent sources and directness
 of evidence), and evidence_url (from the profiles, or "").
 Claims about pricing or specific numbers require a direct source to be "supported".
-Prefer independent sources (reviews, third-party comparisons) over the vendor's own pages.
-A claim needs two or more independent sources to deserve confidence >= 0.8.
+Source quality hierarchy:
+
+Highest trust:
+- Gartner
+- Forrester
+- G2
+- Capterra
+- Reuters
+- Bloomberg
+
+Medium trust:
+- PCMag
+- TechRadar
+- Zapier
+
+Lower trust:
+- Vendor websites
+- Company marketing pages
+
+Scoring guidance:
+
+- Claims supported by multiple independent sources deserve higher confidence.
+
+- Claims supported only by vendor content should generally not exceed 0.7 confidence.
+
+- Claims supported by 2 or more independent sources may receive confidence >= 0.8.
+
+- Pricing claims require direct evidence.
 Return JSON: {"verdicts": [{"claim": str, "status": str, "confidence": float, "evidence_url": str}]}"""
 
 def agent_6_judge(profiles: list[dict], report: dict) -> list[dict]:
